@@ -7,8 +7,8 @@ use Cognesy\Evals\Execution;
 use Cognesy\Evals\Feedback\Feedback;
 use Cognesy\Evals\Observation;
 use Cognesy\Evals\Observers\Evaluate\Data\GradedCorrectnessAnalysis;
-use Cognesy\Instructor\Instructor;
-use Cognesy\Polyglot\LLM\Enums\OutputMode;
+use Cognesy\Instructor\StructuredOutput;
+use Cognesy\Polyglot\Inference\Enums\OutputMode;
 
 class LLMGradedCorrectnessEval implements CanGenerateObservations
 {
@@ -18,9 +18,9 @@ class LLMGradedCorrectnessEval implements CanGenerateObservations
         private string $name,
         private array $expected,
         private array $actual,
-        private ?Instructor $instructor = null,
+        private ?StructuredOutput $structuredOutput = null,
     ) {
-        $this->instructor = $instructor ?? new Instructor();
+        $this->structuredOutput = $structuredOutput ?? new StructuredOutput();
     }
 
     public function accepts(mixed $subject): bool {
@@ -67,16 +67,16 @@ class LLMGradedCorrectnessEval implements CanGenerateObservations
     }
 
     private function llmEval() : GradedCorrectnessAnalysis {
-        return $this->instructor->respond(
-            input: [
+        return $this->structuredOutput
+            ->withInput([
                 'expected_result' => $this->expected,
-                'actual_result' => $this->actual
-            ],
-            responseModel: GradedCorrectnessAnalysis::class,
-            prompt: 'Analyze the expected and actual results and determine how correct the actual result is.',
-            toolName: 'correctness_grade',
-            toolDescription: 'Respond with grade of correctness to indicate to what extent the actual result is correct.',
-            mode: OutputMode::Json,
-        )->get();
+                'actual_result' => $this->actual,
+            ])
+            ->withResponseClass(GradedCorrectnessAnalysis::class)
+            ->withPrompt('Analyze the expected and actual results and determine how correct the actual result is.')
+            ->withToolName('correctness_grade')
+            ->withToolDescription('Respond with grade of correctness to indicate to what extent the actual result is correct.')
+            ->withOutputMode(OutputMode::Json)
+            ->get();
     }
 }

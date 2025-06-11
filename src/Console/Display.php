@@ -4,7 +4,6 @@ namespace Cognesy\Evals\Console;
 
 use Cognesy\Evals\Execution;
 use Cognesy\Evals\Experiment;
-use Cognesy\Http\Debug\Debug;
 use Cognesy\Utils\Cli\Color;
 use Cognesy\Utils\Cli\Console;
 use Cognesy\Utils\Str;
@@ -57,15 +56,15 @@ class Display
 
     public function displayExecution(Execution $execution) : void {
         $id = Str::limit(text: $execution->id(), limit: 4, cutMarker: '', align: STR_PAD_LEFT);
-        $connection = $execution->get('case.connection');
+        $preset = $execution->get('case.preset');
         $mode = $execution->get('case.mode')->value;
         $streamed = $execution->get('case.isStreamed');
         $streamLabel = $streamed ? 'stream' : 'sync';
 
         Console::printColumns([
             [5, $id, STR_PAD_LEFT, Color::DARK_GRAY],
-            [10, $connection, STR_PAD_RIGHT, Color::WHITE],
-            [11, $mode, STR_PAD_RIGHT, Color::YELLOW],
+            [16, $preset, STR_PAD_RIGHT, Color::WHITE],
+            [16, $mode, STR_PAD_RIGHT, Color::YELLOW],
             [8, $streamLabel, STR_PAD_LEFT, $streamed ? Color::BLUE : Color::DARK_BLUE],
         ], $this->terminalWidth);
         Console::print('', [Color::GRAY, Color::BG_BLACK]);
@@ -88,9 +87,9 @@ class Display
             ], $this->terminalWidth);
             Console::println('');
             Console::println($exception->getMessage(), [Color::GRAY]);
-            if (Debug::isEnabled()) {
-                Console::println($exception->getTraceAsString(), [Color::DARK_GRAY]);
-            }
+//            if (Debug::isEnabled()) {
+//                Console::println($exception->getTraceAsString(), [Color::DARK_GRAY]);
+//            }
         }
         Console::println('');
     }

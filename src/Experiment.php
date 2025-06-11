@@ -1,25 +1,26 @@
 <?php
 namespace Cognesy\Evals;
 
-use Cognesy\Evals\Observers\Aggregate\ExperimentFailureRate;
 use Cognesy\Evals\Console\Display;
 use Cognesy\Evals\Contracts\CanRunExecution;
+use Cognesy\Evals\Observers\Aggregate\ExperimentFailureRate;
 use Cognesy\Evals\Observers\Aggregate\ExperimentLatency;
 use Cognesy\Evals\Observers\Measure\DurationObserver;
 use Cognesy\Evals\Observers\Measure\TokenUsageObserver;
-use Cognesy\Polyglot\LLM\Data\Usage;
+use Cognesy\Events\Dispatchers\EventDispatcher;
+use Cognesy\Polyglot\Inference\Data\Usage;
 use Cognesy\Utils\DataMap;
-use Cognesy\Utils\Events\EventDispatcher;
 use Cognesy\Utils\Uuid;
 use DateTime;
 use Exception;
 use Generator;
+use Psr\EventDispatcher\EventDispatcherInterface;
 
 class Experiment {
     use Traits\Experiment\HandlesAccess;
     use Traits\Experiment\HandlesExecution;
 
-    private EventDispatcher $events;
+    private EventDispatcherInterface $events;
     private array $defaultProcessors = [
         DurationObserver::class,
         TokenUsageObserver::class,
@@ -52,7 +53,7 @@ class Experiment {
         CanRunExecution $executor,
         array|object    $processors,
         array|object    $postprocessors,
-        ?EventDispatcher $events = null,
+        ?EventDispatcherInterface $events = null,
     ) {
         $this->events = $events ?? new EventDispatcher();
         $this->id = Uuid::uuid4();

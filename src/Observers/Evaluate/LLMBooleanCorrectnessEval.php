@@ -7,8 +7,8 @@ use Cognesy\Evals\Execution;
 use Cognesy\Evals\Feedback\Feedback;
 use Cognesy\Evals\Observation;
 use Cognesy\Evals\Observers\Evaluate\Data\BooleanCorrectnessAnalysis;
-use Cognesy\Instructor\Instructor;
-use Cognesy\Polyglot\LLM\Enums\OutputMode;
+use Cognesy\Instructor\StructuredOutput;
+use Cognesy\Polyglot\Inference\Enums\OutputMode;
 
 class LLMBooleanCorrectnessEval implements CanGenerateObservations
 {
@@ -18,9 +18,9 @@ class LLMBooleanCorrectnessEval implements CanGenerateObservations
         private string $name,
         private array $expected,
         private array $actual,
-        private ?Instructor $instructor = null,
+        private ?StructuredOutput $structuredOutput = null,
     ) {
-        $this->instructor = $instructor ?? new Instructor();
+        $this->structuredOutput = $structuredOutput ?? new StructuredOutput();
     }
 
     public function accepts(mixed $subject): bool {
@@ -73,16 +73,17 @@ class LLMBooleanCorrectnessEval implements CanGenerateObservations
     }
 
     private function llmEval() : BooleanCorrectnessAnalysis {
-        return $this->instructor->request(
-            input: [
+        return $this->structuredOutput
+            ->withInput([
                 'expected_result' => $this->expected,
                 'actual_result' => $this->actual
-            ],
-            responseModel: BooleanCorrectnessAnalysis::class,
-            prompt: 'Analyze the expected and actual results and determine if the actual result is correct.',
-            toolName: 'correctness_evaluation',
-            toolDescription: 'Respond with true or false to indicate if the actual result is correct.',
-            mode: OutputMode::Json,
-        )->get();
+            ])
+            ->withResponseClass(BooleanCorrectnessAnalysis::class)
+            ->withPrompt('Analyze the expected and actual results and determine if the actual result is correct.')
+            ->withSystem('You are a correctness evaluator. You will be given an expected result and an actual result. Your task is to determine if the actual result is correct. Follow schema: <|json_schema|>')
+            ->withToolName('correctness_evaluation')
+            ->withToolDescription('Respond with true or false to indicate if the actual result is correct.')
+            ->withOutputMode(OutputMode::Json)
+            ->get();
     }
 }

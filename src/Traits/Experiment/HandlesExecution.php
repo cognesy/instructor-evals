@@ -9,7 +9,7 @@ use Cognesy\Evals\Events\ExperimentStarted;
 use Cognesy\Evals\Execution;
 use Cognesy\Evals\Observation;
 use Cognesy\Evals\Observation\MakeObservations;
-use Cognesy\Polyglot\LLM\Data\Usage;
+use Cognesy\Polyglot\Inference\Data\Usage;
 use DateTime;
 use Exception;
 
@@ -61,7 +61,9 @@ trait HandlesExecution
             method_exists($case, 'toArray') => $case->toArray(),
             default => (array) $case,
         };
-        return (new Execution(case: $caseData))
+        return (new Execution(
+            case: $caseData,
+            events: $this->events))
             ->withExecutor($this->executor)
             ->withProcessors($this->processors)
             ->withPostprocessors($this->postprocessors);

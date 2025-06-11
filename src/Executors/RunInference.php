@@ -5,7 +5,7 @@ namespace Cognesy\Evals\Executors;
 use Cognesy\Evals\Contracts\CanRunExecution;
 use Cognesy\Evals\Execution;
 use Cognesy\Evals\Executors\Data\InferenceData;
-use Cognesy\Polyglot\LLM\Data\LLMResponse;
+use Cognesy\Polyglot\Inference\Data\InferenceResponse;
 
 class RunInference implements CanRunExecution
 {
@@ -18,15 +18,25 @@ class RunInference implements CanRunExecution
     }
 
     public function run(Execution $execution) : Execution {
-        $execution->data()->set('response', $this->makeLLMResponse($execution));
+        $execution->data()->set('response', $this->makeInferenceResponse($execution));
         return $execution;
+    }
+
+    public function withDebugPreset(?string $preset) : self {
+        $this->inferenceAdapter->withDebugPreset($preset);
+        return $this;
+    }
+
+    public function wiretap(?callable $callback) : self {
+        $this->inferenceAdapter->wiretap($callback);
+        return $this;
     }
 
     // INTERNAL /////////////////////////////////////////////////
 
-    private function makeLLMResponse(Execution $execution) : LLMResponse {
+    private function makeInferenceResponse(Execution $execution) : InferenceResponse {
         return $this->inferenceAdapter->callInferenceFor(
-            connection: $execution->get('case.connection'),
+            preset: $execution->get('case.preset'),
             mode: $execution->get('case.mode'),
             isStreamed: $execution->get('case.isStreamed'),
             messages: $this->inferenceData->messages,

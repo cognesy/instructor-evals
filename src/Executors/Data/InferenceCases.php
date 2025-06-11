@@ -2,23 +2,24 @@
 
 namespace Cognesy\Evals\Executors\Data;
 
+use Cognesy\Config\Settings;
 use Cognesy\Evals\Utils\Combination;
-use Cognesy\Polyglot\LLM\Enums\OutputMode;
-use Cognesy\Utils\Settings;
+use Cognesy\Polyglot\Inference\Config\LLMConfig;
+use Cognesy\Polyglot\Inference\Enums\OutputMode;
 use Generator;
 
 class InferenceCases
 {
-    private array $connections = [];
+    private array $presets = [];
     private array $modes = [];
     private array $stream = [];
 
     private function __construct(
-        array $connections = [],
+        array $presets = [],
         array $modes = [],
         array $stream = [],
     ) {
-        $this->connections = $connections;
+        $this->presets = $presets;
         $this->modes = $modes;
         $this->stream = $stream;
     }
@@ -28,14 +29,14 @@ class InferenceCases
     }
 
     public static function except(
-        array $connections = [],
+        array $presets = [],
         array $modes = [],
         array $stream = [],
     ) : Generator {
         $instance = (new self)->initiateWithAll();
-        $instance->connections = match(true) {
-            [] === $connections => $instance->connections,
-            default => array_diff($instance->connections, $connections),
+        $instance->presets = match(true) {
+            [] === $presets => $instance->presets,
+            default => array_diff($instance->presets, $presets),
         };
         $instance->modes = match(true) {
             [] === $modes => $instance->modes,
@@ -49,14 +50,14 @@ class InferenceCases
     }
 
     public static function only(
-        array $connections = [],
+        array $presets = [],
         array $modes = [],
         array $stream = [],
     ) : Generator {
         $instance = (new self)->initiateWithAll();
-        $instance->connections = match(true) {
-            [] === $connections => $instance->connections,
-            default => array_intersect($instance->connections, $connections),
+        $instance->presets = match(true) {
+            [] === $presets => $instance->presets,
+            default => array_intersect($instance->presets, $presets),
         };
         $instance->modes = match(true) {
             [] === $modes => $instance->modes,
@@ -73,7 +74,7 @@ class InferenceCases
 
     private function initiateWithAll() : self {
         return new self(
-            connections: $this->connections(),
+            presets: $this->presets(),
             modes: $this->modes(),
             stream: $this->streamingModes(),
         );
@@ -88,14 +89,14 @@ class InferenceCases
             sources: [
                 'isStreamed' => $this->stream ?: $this->streamingModes(),
                 'mode' => $this->modes ?: $this->modes(),
-                'connection' => $this->connections ?: $this->connections(),
+                'preset' => $this->presets ?: $this->presets(),
             ],
         );
     }
 
-    private function connections() : array {
-        $connections = Settings::get('llm', 'connections', []);
-        return array_keys($connections);
+    private function presets() : array {
+        $presets = Settings::get(LLMConfig::group(), 'presets', []);
+        return array_keys($presets);
 //        return [
 //            'azure',
 //            'cohere1',

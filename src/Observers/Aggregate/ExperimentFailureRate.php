@@ -14,6 +14,7 @@ class ExperimentFailureRate implements CanObserveExperiment
      * @param Experiment $experiment The experiment to observe.
      * @return Observation The observation containing the experiment's failure rate and metadata.
      */
+    #[\Override]
     public function observe(Experiment $experiment): Observation {
         return Observation::make(
             type: 'summary',
@@ -36,7 +37,7 @@ class ExperimentFailureRate implements CanObserveExperiment
      *
      * @param Experiment $experiment The experiment instance from which metrics are calculated.
      *
-     * @return object An anonymous object containing failureRate, total, and failed properties.
+     * @return object{failureRate: float, total: int, failed: int} An anonymous object containing failureRate, total, and failed properties.
      */
     private function metrics(Experiment $experiment) : object {
         $executionCount = count($experiment->executions());

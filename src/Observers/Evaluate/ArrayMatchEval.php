@@ -15,7 +15,7 @@ use Cognesy\Evals\Utils\CompareNestedArrays;
  * This class evaluates the match between expected and actual arrays
  * and generates observations for precision, recall, and detailed feedback.
  *
- * @template T of Execution
+ * @implements CanGenerateObservations<Execution>
  */
 class ArrayMatchEval implements CanGenerateObservations
 {
@@ -30,6 +30,7 @@ class ArrayMatchEval implements CanGenerateObservations
      * @param Execution $subject The subject to be checked.
      * @return bool True if the subject is an instance of Execution, false otherwise.
      */
+    #[\Override]
     public function accepts(mixed $subject): bool {
         return $subject instanceof Execution;
     }
@@ -40,6 +41,7 @@ class ArrayMatchEval implements CanGenerateObservations
      * @param mixed $subject The subject to analyze.
      * @return iterable<Observation> An iterable collection of observational metrics.
      */
+    #[\Override]
     public function observations(mixed $subject): iterable {
         $analysis = $this->analyse($subject);
 
@@ -98,7 +100,7 @@ class ArrayMatchEval implements CanGenerateObservations
     private function critique(Execution $execution): array {
         $data = $execution->get('response')?->findJsonData()->toArray();
         $differences = (new CompareNestedArrays)->compare($this->expected, $data);
-        $feedback = $this->makeFeedback($differences) ?? Feedback::none();
+        $feedback = $this->makeFeedback($differences);
         return array_map(
             callback: fn(Observation $observation) => $observation->withMetadata(['executionId' => $execution->id()]),
             array: $feedback->toObservations([

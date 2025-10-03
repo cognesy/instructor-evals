@@ -10,9 +10,12 @@ use Cognesy\Evals\Observers\Evaluate\Data\GradedCorrectnessAnalysis;
 use Cognesy\Instructor\StructuredOutput;
 use Cognesy\Polyglot\Inference\Enums\OutputMode;
 
+/**
+ * @implements CanGenerateObservations<Execution>
+ */
 class LLMGradedCorrectnessEval implements CanGenerateObservations
 {
-    private GradedCorrectnessAnalysis $result;
+    private ?GradedCorrectnessAnalysis $result = null;
 
     public function __construct(
         private string $name,
@@ -23,10 +26,12 @@ class LLMGradedCorrectnessEval implements CanGenerateObservations
         $this->structuredOutput = $structuredOutput ?? new StructuredOutput();
     }
 
+    #[\Override]
     public function accepts(mixed $subject): bool {
         return $subject instanceof Execution;
     }
 
+    #[\Override]
     public function observations(mixed $subject): iterable {
         yield $this->measure($subject);
         yield from $this->critique($subject);
@@ -60,7 +65,7 @@ class LLMGradedCorrectnessEval implements CanGenerateObservations
     }
 
     private function call() : GradedCorrectnessAnalysis {
-        if (!$this->result) {
+        if ($this->result === null) {
             $this->result = $this->llmEval();
         }
         return $this->result;

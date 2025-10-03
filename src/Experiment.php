@@ -117,7 +117,10 @@ class Experiment {
         try {
             $execution->execute();
         } catch(Exception $e) {
-            $this->exceptions[$execution->id()] = $execution->exception();
+            $exception = $execution->exception();
+            if ($exception !== null) {
+                $this->exceptions[$execution->id()] = $exception;
+            }
         }
         $this->executions[] = $execution;
         return $execution;
@@ -126,7 +129,7 @@ class Experiment {
     private function makeExecution(mixed $case) : Execution {
         $caseData = match(true) {
             is_array($case) => $case,
-            method_exists($case, 'toArray') => $case->toArray(),
+            is_object($case) && method_exists($case, 'toArray') => $case->toArray(),
             default => (array) $case,
         };
         return (new Execution(

@@ -12,7 +12,7 @@ class SelectObservations
 
     public static function from(array $sources) : self {
         if (is_array($sources[0] ?? null)) {
-            $sources = array_merge(...$sources);
+            $sources = array_merge(...array_values($sources));
         }
         return new self($sources);
     }
@@ -44,12 +44,18 @@ class SelectObservations
         );
     }
 
+    /**
+     * @param callable(\Cognesy\Evals\Observation):bool $callback
+     */
     public function filter(callable $callback) : self {
         return new SelectObservations(
             array_filter($this->observations, $callback)
         );
     }
 
+    /**
+     * @param callable(\Cognesy\Evals\Observation,\Cognesy\Evals\Observation):int $callback
+     */
     public function sort(callable $callback) : self {
         $observations = $this->observations;
         usort($observations, $callback);

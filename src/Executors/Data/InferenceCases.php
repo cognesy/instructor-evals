@@ -3,33 +3,14 @@
 namespace Cognesy\Evals\Executors\Data;
 
 use Cognesy\Evals\Utils\Combination;
-use Cognesy\Events\Contracts\CanHandleEvents;
-use Cognesy\Events\Dispatchers\EventDispatcher;
-use Cognesy\Http\Contracts\CanSendHttpRequests;
-use Cognesy\Http\Creation\HttpClientBuilder;
-use Cognesy\Http\Drivers\Mock\MockHttpDriver;
 use Cognesy\Instructor\Enums\OutputMode;
 use Cognesy\Polyglot\Inference\Config\LLMConfig;
-use Cognesy\Polyglot\Inference\Contracts\CanProcessInferenceRequest;
-use Cognesy\Polyglot\Inference\Contracts\CanProvideInferenceDrivers;
-use Cognesy\Polyglot\Inference\Creation\BundledInferenceDrivers;
+use Cognesy\Polyglot\Inference\Models\ModelCatalog;
+use Cognesy\Polyglot\Inference\Models\SupportStatus;
 use Generator;
 
 class InferenceCases
 {
-    /** @var array<string, array<string, mixed>> */
-    private const DEFAULT_CONNECTION_CONFIGS = [
-        'a21' => ['driver' => 'a21', 'model' => 'jamba-large-1.7'],
-        'anthropic' => ['driver' => 'anthropic', 'model' => 'claude-3-5-sonnet-latest'],
-        'deepseek' => ['driver' => 'deepseek', 'model' => 'deepseek-v4-flash'],
-        // Keep the connection name as a compatibility alias; it now selects the current V4 Pro.
-        'deepseek-r' => ['driver' => 'deepseek', 'model' => 'deepseek-v4-pro'],
-        'gemini-oai' => ['driver' => 'gemini-oai', 'model' => 'gemini-2.5-flash'],
-        'openai' => ['driver' => 'openai', 'model' => 'gpt-4o-mini'],
-        'perplexity' => ['driver' => 'perplexity', 'model' => 'sonar'],
-        'sambanova' => ['driver' => 'sambanova', 'model' => 'Meta-Llama-3.1-70B-Instruct'],
-    ];
-
     private array $connections = [];
     private array $modes = [];
     private array $stream = [];
@@ -37,9 +18,7 @@ class InferenceCases
     /** @var array<string, LLMConfig> */
     private array $connectionConfigs = [];
 
-    private ?CanProvideInferenceDrivers $drivers = null;
-    private ?CanSendHttpRequests $httpClient = null;
-    private ?CanHandleEvents $events = null;
+    private ModelCatalog $models;
 
     /**
      * @param array<string> $connections
@@ -53,12 +32,14 @@ class InferenceCases
         array $stream = [],
         bool $filterByCapabilities = true,
         array $connectionConfigs = [],
+        ?ModelCatalog $models = null,
     ) {
         $this->connections = $connections;
         $this->modes = $modes;
         $this->stream = $stream;
         $this->filterByCapabilities = $filterByCapabilities;
         $this->connectionConfigs = $this->normalizeConnectionConfigs($connectionConfigs);
+        $this->models = $models ?? ModelCatalog::discover();
     }
 
     /**
@@ -67,10 +48,12 @@ class InferenceCases
     public static function all(
         bool $filterByCapabilities = true,
         array $connectionConfigs = [],
+        ?ModelCatalog $models = null,
     ) : Generator {
         return (new self(
             filterByCapabilities: $filterByCapabilities,
             connectionConfigs: $connectionConfigs,
+            models: $models,
         ))->initiateWithAll()->make();
     }
 
@@ -86,10 +69,12 @@ class InferenceCases
         array $stream = [],
         bool $filterByCapabilities = true,
         array $connectionConfigs = [],
+        ?ModelCatalog $models = null,
     ) : Generator {
         $instance = (new self(
             filterByCapabilities: $filterByCapabilities,
             connectionConfigs: $connectionConfigs,
+            models: $models,
         ))->initiateWithAll();
         $instance->connections = match (true) {
             [] === $connections => $instance->connections,
@@ -118,10 +103,12 @@ class InferenceCases
         array $stream = [],
         bool $filterByCapabilities = true,
         array $connectionConfigs = [],
+        ?ModelCatalog $models = null,
     ) : Generator {
         $instance = (new self(
             filterByCapabilities: $filterByCapabilities,
             connectionConfigs: $connectionConfigs,
+            models: $models,
         ))->initiateWithAll();
         $instance->connections = match (true) {
             [] === $connections => $instance->connections,
@@ -145,10 +132,8 @@ class InferenceCases
             stream: $this->streamingModes(),
             filterByCapabilities: $this->filterByCapabilities,
             connectionConfigs: $this->connectionConfigs,
+            models: $this->models,
         );
-        $instance->drivers = $this->drivers;
-        $instance->httpClient = $this->httpClient;
-        $instance->events = $this->events;
         return $instance;
     }
 
@@ -159,9 +144,9 @@ class InferenceCases
         $generator = Combination::generator(
             mapping: InferenceCaseParams::class,
             sources: [
-                'isStreamed' => $this->stream ?: $this->streamingModes(),
-                'mode' => $this->modes ?: $this->modes(),
-                'connection' => $this->connections ?: $this->connections(),
+                'isStreamed' => $this->stream,
+                'mode' => $this->modes,
+                'connection' => $this->connections,
             ],
         );
 
@@ -179,71 +164,23 @@ class InferenceCases
     }
 
     private function isSupported(InferenceCaseParams $case) : bool {
-        try {
-            $driver = $this->getDriverForConnection($case->llmConfig);
-            if ($driver === null) {
-                return true;
-            }
-
-            if (!($driver instanceof \Cognesy\Polyglot\Inference\Contracts\CanDescribeCapabilities)) {
-                return true;
-            }
-            $capabilities = $driver->capabilities();
-            $supportsMode = match ($case->mode) {
-                OutputMode::Json => $capabilities->supportsResponseFormatJsonObject(),
-                OutputMode::JsonSchema => $capabilities->supportsResponseFormatJsonSchema(),
-                OutputMode::Tools => $capabilities->supportsToolCalling(),
-                default => true,
-            };
-
-            if (!$supportsMode) {
-                return false;
-            }
-
-            if ($case->isStreamed && !$capabilities->supportsStreaming()) {
-                return false;
-            }
-
-            return true;
-        } catch (\Exception) {
-            return true;
-        }
-    }
-
-    private function getDriverForConnection(?LLMConfig $config) : ?CanProcessInferenceRequest {
+        $config = $case->llmConfig;
         if ($config === null) {
-            return null;
+            return true;
         }
+        $capabilities = $this->models->find($config->driver, $config->model)->capabilities;
+        $mode = match ($case->mode) {
+            OutputMode::Json => $capabilities->jsonObject,
+            OutputMode::JsonSchema => $capabilities->jsonSchema,
+            OutputMode::Tools => $capabilities->tools,
+            default => SupportStatus::Supported,
+        };
 
-        return $this->getDrivers()->makeDriver(
-            name: $config->driver,
-            config: $config,
-            httpClient: $this->getHttpClient(),
-            events: $this->getEvents(),
-        );
-    }
-
-    private function getDrivers() : CanProvideInferenceDrivers {
-        if ($this->drivers === null) {
-            $this->drivers = BundledInferenceDrivers::registry();
-        }
-        return $this->drivers;
-    }
-
-    private function getHttpClient() : CanSendHttpRequests {
-        if ($this->httpClient === null) {
-            $this->httpClient = (new HttpClientBuilder())
-                ->withDriver(new MockHttpDriver())
-                ->create();
-        }
-        return $this->httpClient;
-    }
-
-    private function getEvents() : CanHandleEvents {
-        if ($this->events === null) {
-            $this->events = new EventDispatcher();
-        }
-        return $this->events;
+        return match (true) {
+            $mode->isUnsupported() => false,
+            $case->isStreamed => !$capabilities->streaming->isUnsupported(),
+            default => true,
+        };
     }
 
     /** @return array<string> */
@@ -257,7 +194,7 @@ class InferenceCases
      */
     private function normalizeConnectionConfigs(array $connectionConfigs) : array {
         $source = match (true) {
-            [] === $connectionConfigs => self::DEFAULT_CONNECTION_CONFIGS,
+            [] === $connectionConfigs => $this->defaultConnectionConfigs(),
             default => $connectionConfigs,
         };
 
@@ -270,6 +207,15 @@ class InferenceCases
             };
         }
         return $normalized;
+    }
+
+    /** @return array<string, LLMConfig> */
+    private function defaultConnectionConfigs() : array {
+        $connections = LLMConfig::presetNames();
+        return array_combine(
+            $connections,
+            array_map(LLMConfig::fromPreset(...), $connections),
+        );
     }
 
     /** @return array<bool> */
@@ -290,21 +236,6 @@ class InferenceCases
             OutputMode::Tools,
             OutputMode::Unrestricted,
         ];
-    }
-
-    public function withDrivers(CanProvideInferenceDrivers $drivers) : self {
-        $this->drivers = $drivers;
-        return $this;
-    }
-
-    public function withHttpClient(CanSendHttpRequests $httpClient) : self {
-        $this->httpClient = $httpClient;
-        return $this;
-    }
-
-    public function withEvents(CanHandleEvents $events) : self {
-        $this->events = $events;
-        return $this;
     }
 
     /**
